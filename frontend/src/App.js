@@ -15,7 +15,6 @@ const App = () => {
   return (
     <Router>
       <div>
-      <Login/>
         <h1>Management System</h1>
         <Routes>
           <Route path="/" element={<Login />} />

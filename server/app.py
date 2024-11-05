@@ -13,7 +13,7 @@ def create_connection():
     return mysql.connector.connect(
         host='localhost',
         user='root',
-        password='santhosh090405@',
+        password='ragu 16-10-2004',
         database='admin_db'
     )
 
@@ -53,7 +53,6 @@ def login():
     user = cursor.fetchone()
 
     if user and check_password_hash(user['password'], password):
-        # Return both role and access_id in the response
         return jsonify({
             'role': user['role'],
             'access_id': user['access_id']
