@@ -7,7 +7,7 @@ from flask_cors import CORS
 import uuid  # Add this import to generate UUIDs
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)  
 
 def create_connection():
     return mysql.connector.connect(
@@ -20,7 +20,7 @@ def create_connection():
 @app.route('/register', methods=['POST'])
 def register_user():
     data = request.get_json()
-    user_id = str(uuid.uuid4())  # Generate a UUID
+    user_id = str(uuid.uuid4())  
     username = data['username']
     password = data['password']
     role = data['role']

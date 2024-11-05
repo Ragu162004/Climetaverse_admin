@@ -10,12 +10,14 @@ import Members from './components/Members';
 // import BranchAdmin from './Ignore/BranchAdmin';
 // import DprtAdmin from './Ignore/DprtAdmin';
 import Member from './components/Member';
+import './index.css'
+
 
 const App = () => {
   return (
     <Router>
       <div>
-        <h1>Management System</h1>
+        {/* <h1>Management System</h1> */}
         <Routes>
           <Route path="/" element={<Login />} />
           <Route path="/register" element={<Register />} />
