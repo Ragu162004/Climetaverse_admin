@@ -1,28 +1,27 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { useParams, useNavigate } from 'react-router-dom';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEdit, faTrash, faArrowLeft, faPlus } from '@fortawesome/free-solid-svg-icons';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useParams } from "react-router-dom";
+import { EditIcon, TrashIcon } from "lucide-react";
 
 const Members = () => {
   const { departmentId } = useParams();
-  const [dprtName, setDprtName] = useState('');
   const [members, setMembers] = useState([]);
-  const [memberName, setMemberName] = useState('');
-  const [memberPassword, setMemberPassword] = useState('');
-  const [editingMember, setEditingMember] = useState(null);
-  const navigate = useNavigate();
+  const [totalMembers, setTotalMembers] = useState(0);
+  const [recentMember, setRecentMember] = useState(null);
+  const [editMemberId, setEditMemberId] = useState(null);
 
   const fetchMembers = async () => {
     try {
-      const [membersResponse, departmentResponse] = await Promise.all([
-        axios.get(`http://localhost:5000/departments/${departmentId}/members`),
-        axios.get(`http://localhost:5000/departments/${departmentId}`),
-      ]);
-      setMembers(membersResponse.data);
-      setDprtName(departmentResponse.data.name);
+      const response = await axios.get(
+        `http://localhost:5000/departments/${departmentId}/members`
+      );
+      const data = response.data;
+
+      setMembers(data);
+      setTotalMembers(data.length);
+      setRecentMember(data.length > 0 ? data[data.length - 1] : null);
     } catch (error) {
-      console.error('Error fetching members or department:', error);
+      console.error("Error fetching members:", error);
     }
   };
 
@@ -30,37 +29,32 @@ const Members = () => {
     fetchMembers();
   }, [departmentId]);
 
-  const handleAddMember = async (e) => {
-    e.preventDefault();
+  const handleMemberSubmit = async (username, password) => {
     try {
-      if (editingMember) {
-        await axios.put(`http://localhost:5000/users/${editingMember.id}`, { 
-          username: memberName, 
-          password: memberPassword, 
-          role: 'member', 
-          access_id: departmentId 
+      if (editMemberId) {
+        await axios.put(`http://localhost:5000/users/${editMemberId}`, {
+          username,
+          password,
+          role: "member",
+          access_id: departmentId,
         });
-        setEditingMember(null);
       } else {
         await axios.post(`http://localhost:5000/users`, {
-          username: memberName, 
-          password: memberPassword,
-          role: 'member', 
-          access_id: departmentId 
+          username,
+          password,
+          role: "member",
+          access_id: departmentId,
         });
       }
-      setMemberName('');
-      setMemberPassword('');
+      setEditMemberId(null);
       fetchMembers();
     } catch (error) {
-      console.error('Error adding/updating member:', error);
+      console.error("Error adding/updating member:", error);
     }
   };
 
   const handleEditMember = (member) => {
-    setMemberName(member.username);
-    setMemberPassword(''); // Clear password field for security
-    setEditingMember(member);
+    setEditMemberId(member.id);
   };
 
   const handleDeleteMember = async (id) => {
@@ -68,70 +62,98 @@ const Members = () => {
       await axios.delete(`http://localhost:5000/users/${id}`);
       fetchMembers();
     } catch (error) {
-      console.error('Error deleting member:', error);
+      console.error("Error deleting member:", error);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-semibold text-center text-gray-800 mb-6">
-          Members for {dprtName}
-        </h2>
+    <div className="container mx-auto py-10">
+      <div className="bg-white p-6 rounded-md shadow-lg">
+        <h2 className="text-2xl font-semibold mb-4">Members Overview</h2>
+        {/* Member Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-md">
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">
+              Total Members
+            </h3>
+            <p className="text-4xl font-bold text-blue-600">{totalMembers}</p>
+          </div>
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-md">
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">
+              Recently Added
+            </h3>
+            {recentMember ? (
+              <p className="text-lg font-bold text-green-600">
+                {recentMember.username}
+              </p>
+            ) : (
+              <p className="text-sm text-gray-500">No recent members added</p>
+            )}
+          </div>
+        </div>
 
-        {/* Add/Edit Member Form */}
-        <form onSubmit={handleAddMember} className="space-y-4 mb-6">
-          <div className="flex items-center gap-2">
+        <h2 className="text-2xl font-semibold mb-4">Members</h2>
+        {/* Member Form */}
+        <div className="mb-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const username = e.target.elements.username.value;
+              const password = e.target.elements.password.value;
+              handleMemberSubmit(username, password);
+            }}
+          >
             <input
               type="text"
-              value={memberName}
-              onChange={(e) => setMemberName(e.target.value)}
-              placeholder="Member Username"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
-              required
+              name="username"
+              placeholder="Enter Member Username"
+              className="border border-gray-300 p-2 rounded-md"
+              defaultValue={
+                editMemberId
+                  ? members.find((m) => m.id === editMemberId)?.username
+                  : ""
+              }
             />
             <input
               type="password"
-              value={memberPassword}
-              onChange={(e) => setMemberPassword(e.target.value)}
-              placeholder="Member Password"
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
-              required
+              name="password"
+              placeholder="Enter Member Password"
+              className="border border-gray-300 p-2 rounded-md ml-2"
             />
             <button
               type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-2"
+              className="ml-2 bg-blue-500 text-white p-2 rounded-md"
             >
-              <FontAwesomeIcon icon={editingMember ? faEdit : faPlus} />
-              {editingMember ? 'Update Member' : 'Add Member'}
+              {editMemberId ? "Update Member" : "Add Member"}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
 
-        {/* Member List */}
-        <ul className="space-y-4">
+        {/* Members List */}
+        <div className="space-y-6">
           {members.map((member) => (
-            <li key={member.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-md shadow-md border border-gray-200">
-              <span className="text-lg font-semibold text-gray-700">{member.username}</span>
-              <div className="flex space-x-2">
-                <button 
-                  onClick={() => handleEditMember(member)} 
-                  className="px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-1"
+            <div
+              key={member.id}
+              className="bg-gray-100 p-4 rounded-md shadow-md flex justify-between items-center"
+            >
+              <span>{member.username}</span>
+              <div className="space-x-2">
+                <button
+                  onClick={() => handleEditMember(member)}
+                  className="bg-yellow-500 text-white p-2 rounded-md"
                 >
-                  <FontAwesomeIcon icon={faEdit} />
-                  Edit
+                  <EditIcon className="inline-block mr-2" /> Edit
                 </button>
-                <button 
-                  onClick={() => handleDeleteMember(member.id)} 
-                  className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-300 shadow-lg flex items-center gap-1"
+                <button
+                  onClick={() => handleDeleteMember(member.id)}
+                  className="bg-red-500 text-white p-2 rounded-md"
                 >
-                  <FontAwesomeIcon icon={faTrash} />
-                  Delete
+                  <TrashIcon className="inline-block mr-2" /> Delete
                 </button>
               </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </div>
   );

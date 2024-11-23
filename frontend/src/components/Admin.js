@@ -1,22 +1,27 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEdit, faTrash, faPlus, faEye } from '@fortawesome/free-solid-svg-icons';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import { EditIcon, TrashIcon, EyeIcon } from "lucide-react";
 
 const Admin = () => {
   const [organizations, setOrganizations] = useState([]);
-  const [name, setName] = useState('');
+  const [totalOrganizations, setTotalOrganizations] = useState(0);
+  const [recentOrganization, setRecentOrganization] = useState(null);
   const [editId, setEditId] = useState(null);
   const [orgAdmins, setOrgAdmins] = useState({});
-  const [adminData, setAdminData] = useState({});
   const [editingAdmin, setEditingAdmin] = useState(null);
   const navigate = useNavigate();
 
   const fetchOrganizations = async () => {
-    const response = await axios.get('http://localhost:5000/organizations');
-    setOrganizations(response.data);
-    return response.data;
+    const response = await axios.get("http://localhost:5000/organizations");
+    const data = response.data;
+
+    // Update state with organization stats
+    setOrganizations(data);
+    setTotalOrganizations(data.length);
+    setRecentOrganization(data.length > 0 ? data[data.length - 1] : null);
+
+    return data;
   };
 
   const fetchAdmins = async (orgId) => {
@@ -26,55 +31,48 @@ const Admin = () => {
 
   const fetchAllAdmins = async (organizations) => {
     const allAdmins = {};
-    await Promise.all(organizations.map(async (org) => {
-      const admins = await fetchAdmins(org.id);
-      allAdmins[org.id] = admins;
-    }));
+    await Promise.all(
+      organizations.map(async (org) => {
+        const admins = await fetchAdmins(org.id);
+        allAdmins[org.id] = admins;
+      })
+    );
     setOrgAdmins(allAdmins);
   };
 
   useEffect(() => {
     const loadOrganizationsAndAdmins = async () => {
       const orgs = await fetchOrganizations();
-      setOrganizations(orgs);
       await fetchAllAdmins(orgs);
     };
     loadOrganizationsAndAdmins();
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleOrganizationSubmit = async (name) => {
     if (editId) {
       await axios.put(`http://localhost:5000/organizations/${editId}`, { name });
     } else {
-      await axios.post('http://localhost:5000/organizations', { name });
+      await axios.post("http://localhost:5000/organizations", { name });
     }
-    setName('');
     setEditId(null);
-    fetchOrganizations();
-    fetchAllAdmins(organizations);
+    fetchOrganizations(); // Update organizations and stats
   };
 
   const handleEdit = (org) => {
-    setName(org.name);
     setEditId(org.id);
   };
 
   const handleDelete = async (id) => {
     await axios.delete(`http://localhost:5000/organizations/${id}`);
-    fetchOrganizations();
-    fetchAllAdmins(organizations);
+    fetchOrganizations(); // Update organizations and stats
   };
 
-  const handleAddAdmin = async (e, orgId) => {
-    e.preventDefault();
-    const { adminName, adminPassword } = adminData[orgId] || {};
-
+  const handleAdminSubmit = async (orgId, adminName, adminPassword) => {
     if (editingAdmin) {
       await axios.put(`http://localhost:5000/users/${editingAdmin.id}`, {
         username: adminName,
         password: adminPassword,
-        role: 'orgadmin',
+        role: "orgadmin",
         access_id: orgId,
       });
       setEditingAdmin(null);
@@ -82,23 +80,14 @@ const Admin = () => {
       await axios.post(`http://localhost:5000/users`, {
         username: adminName,
         password: adminPassword,
-        role: 'orgadmin',
+        role: "orgadmin",
         access_id: orgId,
       });
     }
-
-    setAdminData((prev) => ({
-      ...prev,
-      [orgId]: { adminName: '', adminPassword: '' },
-    }));
     fetchAllAdmins(organizations);
   };
 
   const handleEditAdmin = (orgId, admin) => {
-    setAdminData((prev) => ({
-      ...prev,
-      [orgId]: { adminName: admin.username, adminPassword: '' },
-    }));
     setEditingAdmin(admin);
   };
 
@@ -107,116 +96,143 @@ const Admin = () => {
     fetchAllAdmins(organizations);
   };
 
-  const handleAdminInputChange = (orgId, field, value) => {
-    setAdminData((prev) => ({
-      ...prev,
-      [orgId]: {
-        ...prev[orgId],
-        [field]: value,
-      },
-    }));
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-semibold text-center text-gray-800 mb-6">Organizations</h2>
+    <div className="container mx-auto py-10">
+      <div className="bg-white p-6 rounded-md shadow-lg">
 
-        <form onSubmit={handleSubmit} className="space-y-4 mb-6">
-          <div className="flex items-center gap-2">
+      <h2 className="text-2xl font-semibold mb-4">Overview</h2>
+        {/* Organization Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+  {/* Card for Total Organizations */}
+  <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-md">
+    <h3 className="text-xl font-semibold text-gray-700 mb-2">Total Organizations</h3>
+    <p className="text-4xl font-bold text-blue-600">{totalOrganizations}</p>
+  </div>
+
+  {/* Card for Recently Added Organization */}
+  <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-md">
+    <h3 className="text-xl font-semibold text-gray-700 mb-2">Recently Added</h3>
+    {recentOrganization ? (
+      <p className="text-lg font-bold text-green-600">{recentOrganization.name}</p>
+    ) : (
+      <p className="text-sm text-gray-500">No recent organizations added</p>
+    )}
+  </div>
+</div>
+
+
+        <h2 className="text-2xl font-semibold mb-4">Organizations</h2>
+        {/* Organization Form */}
+        <div className="mb-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = e.target.elements.name.value;
+              handleOrganizationSubmit(name);
+            }}
+          >
             <input
               type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Organization Name"
-              required
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
+              name="name"
+              placeholder="Enter Organization Name"
+              className="border border-gray-300 p-2 rounded-md"
+              defaultValue={editId ? organizations.find((org) => org.id === editId)?.name : ""}
             />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-2"
-            >
-              <FontAwesomeIcon icon={faPlus} />
-              {editId ? 'Update Organization' : 'Add Organization'}
+            <button type="submit" className="ml-2 bg-blue-500 text-white p-2 rounded-md">
+              {editId ? "Update Organization" : "Create Organization"}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
 
-        <ul className="space-y-4">
+        {/* Organizations List */}
+        <div className="space-y-6">
           {organizations.map((org) => (
-            <li key={org.id} className="bg-gray-50 p-4 rounded-md shadow-md border border-gray-200">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-lg font-semibold text-indigo-800">{org.name}</span>
-                <div className="flex space-x-2">
-                  <button onClick={() => handleEdit(org)} 
-                    className="px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-1">
-                    <FontAwesomeIcon icon={faEdit} />
-                    Edit
+            <div key={org.id} className="bg-gray-100 p-4 rounded-md shadow-md">
+              <div className="flex justify-between items-center">
+                <span className="text-xl">{org.name}</span>
+                <div className="space-x-2">
+                  <button
+                    onClick={() => handleEdit(org)}
+                    className="bg-yellow-500 text-white p-2 rounded-md"
+                  >
+                    <EditIcon className="inline-block mr-2" /> Edit
                   </button>
-                  <button onClick={() => handleDelete(org.id)} 
-                    className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-300 shadow-lg flex items-center gap-1">
-                    <FontAwesomeIcon icon={faTrash} />
-                    Delete
+                  <button
+                    onClick={() => handleDelete(org.id)}
+                    className="bg-red-500 text-white p-2 rounded-md"
+                  >
+                    <TrashIcon className="inline-block mr-2" /> Delete
                   </button>
-                  <button onClick={() => navigate(`/branches/${org.id}`)} 
-                    className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition duration-300 shadow-lg flex items-center gap-1">
-                    <FontAwesomeIcon icon={faEye} />
-                    View Branches
+                  <button
+                    onClick={() => navigate(`/branches/${org.id}`)}
+                    className="bg-green-500 text-white p-2 rounded-md"
+                  >
+                    <EyeIcon className="inline-block mr-2" /> View Branches
                   </button>
                 </div>
               </div>
 
-              <div>
-                <h4 className="font-semibold mb-2">Admins for {org.name}</h4>
-                <form onSubmit={(e) => handleAddAdmin(e, org.id)} className="flex space-x-2 mb-4">
+              <h4 className="font-semibold mt-4">Admins for {org.name}</h4>
+              {/* Admin Form */}
+              <div className="mb-4">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const adminName = e.target.elements.adminName.value;
+                    const adminPassword = e.target.elements.adminPassword.value;
+                    handleAdminSubmit(org.id, adminName, adminPassword);
+                  }}
+                >
                   <input
                     type="text"
-                    value={adminData[org.id]?.adminName || ''}
-                    onChange={(e) => handleAdminInputChange(org.id, 'adminName', e.target.value)}
-                    placeholder="Admin Name"
-                    required
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
+                    name="adminName"
+                    placeholder="Admin Username"
+                    className="border border-gray-300 p-2 rounded-md"
+                    defaultValue={editingAdmin?.username || ""}
                   />
                   <input
                     type="password"
-                    value={adminData[org.id]?.adminPassword || ''}
-                    onChange={(e) => handleAdminInputChange(org.id, 'adminPassword', e.target.value)}
+                    name="adminPassword"
                     placeholder="Admin Password"
-                    required
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
+                    className="border border-gray-300 p-2 rounded-md ml-2"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-2"
+                    className="ml-2 bg-blue-500 text-white p-2 rounded-md"
                   >
-                    <FontAwesomeIcon icon={editingAdmin ? faEdit : faPlus} />
-                    {editingAdmin ? 'Update Admin' : 'Add Admin'}
+                    {editingAdmin ? "Update Admin" : "Add Admin"}
                   </button>
                 </form>
-
-                <ul>
-                  {(orgAdmins[org.id] || []).map((admin) => (
-                    <li key={admin.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-md mb-2">
-                      <span>{admin.username}</span>
-                      <div className="flex space-x-2">
-                        <button onClick={() => handleEditAdmin(org.id, admin)} 
-                          className="px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-1">
-                          <FontAwesomeIcon icon={faEdit} />
-                          Edit
-                        </button>
-                        <button onClick={() => handleDeleteAdmin(org.id, admin.id)} 
-                          className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-300 shadow-lg flex items-center gap-1">
-                          <FontAwesomeIcon icon={faTrash} />
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
               </div>
-            </li>
+
+              {/* Admin List */}
+              <div className="space-y-2">
+                {(orgAdmins[org.id] || []).map((admin) => (
+                  <div
+                    key={admin.id}
+                    className="flex justify-between items-center bg-gray-200 p-2 rounded-md"
+                  >
+                    <span>{admin.username}</span>
+                    <div className="space-x-2">
+                      <button
+                        onClick={() => handleEditAdmin(org.id, admin)}
+                        className="bg-yellow-500 text-white p-2 rounded-md"
+                      >
+                        <EditIcon className="inline-block mr-2" /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAdmin(org.id, admin.id)}
+                        className="bg-red-500 text-white p-2 rounded-md"
+                      >
+                        <TrashIcon className="inline-block mr-2" /> Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </div>
   );

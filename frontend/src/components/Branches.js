@@ -1,84 +1,81 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { useParams, useNavigate } from 'react-router-dom';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEdit, faTrash, faPlus, faEye } from '@fortawesome/free-solid-svg-icons';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useParams, useNavigate } from "react-router-dom";
+import { EditIcon, TrashIcon, EyeIcon } from "lucide-react";
 
 const Branches = () => {
   const { organizationId } = useParams();
-  const [organizationName, setOrganizationName] = useState('');
   const [branches, setBranches] = useState([]);
-  const [branchName, setBranchName] = useState('');
-  const [editingBranch, setEditingBranch] = useState(null);
-  const [editingAdmin, setEditingAdmin] = useState(null);
+  const [totalBranches, setTotalBranches] = useState(0);
+  const [recentBranch, setRecentBranch] = useState(null);
+  const [editBranchId, setEditBranchId] = useState(null);
   const [branchAdmins, setBranchAdmins] = useState({});
-  const [adminData, setAdminData] = useState({});
+  const [editingAdmin, setEditingAdmin] = useState(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const fetchOrganizationAndBranches = async () => {
-      const orgResponse = await axios.get(`http://localhost:5000/organizations/${organizationId}`);
-      setOrganizationName(orgResponse.data.name);
+  const fetchBranches = async () => {
+    const response = await axios.get(
+      `http://localhost:5000/organizations/${organizationId}/branches`
+    );
+    const data = response.data;
 
-      const branchesResponse = await axios.get(`http://localhost:5000/organizations/${organizationId}/branches`);
-      setBranches(branchesResponse.data);
+    // Update state with branch stats
+    setBranches(data);
+    setTotalBranches(data.length);
+    setRecentBranch(data.length > 0 ? data[data.length - 1] : null);
 
-      const adminsPromises = branchesResponse.data.map(async (branch) => {
-        const response = await axios.get(`http://localhost:5000/branches/${branch.id}/members`);
-        return { branchId: branch.id, admins: response.data };
-      });
-
-      const adminsData = await Promise.all(adminsPromises);
-      const adminsByBranch = adminsData.reduce((acc, { branchId, admins }) => {
-        acc[branchId] = admins;
-        return acc;
-      }, {});
-      setBranchAdmins(adminsByBranch);
-    };
-
-    fetchOrganizationAndBranches();
-  }, [organizationId]);
-
-  const handleAddBranch = async (e) => {
-    e.preventDefault();
-    if (editingBranch) {
-      await axios.put(`http://localhost:5000/branches/${editingBranch.id}`, { name: branchName });
-      setEditingBranch(null);
-    } else {
-      await axios.post(`http://localhost:5000/organizations/${organizationId}/branches`, { name: branchName });
-    }
-    setBranchName('');
-    fetchBranches();
+    return data;
   };
 
-  const fetchBranches = async () => {
-    const response = await axios.get(`http://localhost:5000/organizations/${organizationId}/branches`);
-    setBranches(response.data);
+  const fetchAdmins = async (branchId) => {
+    const response = await axios.get(`http://localhost:5000/branches/${branchId}/members`);
+    return response.data;
+  };
+
+  const fetchAllAdmins = async (branches) => {
+    const allAdmins = {};
+    await Promise.all(
+      branches.map(async (branch) => {
+        const admins = await fetchAdmins(branch.id);
+        allAdmins[branch.id] = admins;
+      })
+    );
+    setBranchAdmins(allAdmins);
+  };
+
+  useEffect(() => {
+    const loadBranchesAndAdmins = async () => {
+      const branchData = await fetchBranches();
+      await fetchAllAdmins(branchData);
+    };
+    loadBranchesAndAdmins();
+  }, [organizationId]);
+
+  const handleBranchSubmit = async (name) => {
+    if (editBranchId) {
+      await axios.put(`http://localhost:5000/branches/${editBranchId}`, { name });
+    } else {
+      await axios.post(`http://localhost:5000/organizations/${organizationId}/branches`, { name });
+    }
+    setEditBranchId(null);
+    fetchBranches(); // Update branches and stats
   };
 
   const handleEditBranch = (branch) => {
-    setBranchName(branch.name);
-    setEditingBranch(branch);
+    setEditBranchId(branch.id);
   };
 
   const handleDeleteBranch = async (id) => {
     await axios.delete(`http://localhost:5000/branches/${id}`);
-    fetchBranches();
+    fetchBranches(); // Update branches and stats
   };
 
-  const handleViewDepartments = (branchId) => {
-    navigate(`/departments/${branchId}`);
-  };
-
-  const handleAddAdmin = async (e, branchId) => {
-    e.preventDefault();
-    const { adminName, adminPassword } = adminData[branchId] || {};
-
+  const handleAdminSubmit = async (branchId, adminName, adminPassword) => {
     if (editingAdmin) {
       await axios.put(`http://localhost:5000/users/${editingAdmin.id}`, {
         username: adminName,
         password: adminPassword,
-        role: 'branchadmin',
+        role: "branchadmin",
         access_id: branchId,
       });
       setEditingAdmin(null);
@@ -86,146 +83,155 @@ const Branches = () => {
       await axios.post(`http://localhost:5000/users`, {
         username: adminName,
         password: adminPassword,
-        role: 'branchadmin',
+        role: "branchadmin",
         access_id: branchId,
       });
     }
-
-    setAdminData((prev) => ({
-      ...prev,
-      [branchId]: { adminName: '', adminPassword: '' },
-    }));
-    fetchAdmins(branchId);
-  };
-
-  const fetchAdmins = async (branchId) => {
-    const response = await axios.get(`http://localhost:5000/branches/${branchId}/members`);
-    setBranchAdmins((prev) => ({ ...prev, [branchId]: response.data }));
+    fetchAllAdmins(branches);
   };
 
   const handleEditAdmin = (branchId, admin) => {
-    setAdminData((prev) => ({
-      ...prev,
-      [branchId]: { adminName: admin.username, adminPassword: '' },
-    }));
     setEditingAdmin(admin);
   };
 
   const handleDeleteAdmin = async (branchId, adminId) => {
     await axios.delete(`http://localhost:5000/users/${adminId}`);
-    fetchAdmins(branchId);
-  };
-
-  const handleAdminInputChange = (branchId, field, value) => {
-    setAdminData((prev) => ({
-      ...prev,
-      [branchId]: {
-        ...prev[branchId],
-        [field]: value,
-      },
-    }));
+    fetchAllAdmins(branches);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-semibold text-center text-gray-800 mb-6">Branches for {organizationName}</h2>
+    <div className="container mx-auto py-10">
+      <div className="bg-white p-6 rounded-md shadow-lg">
 
-        <form onSubmit={handleAddBranch} className="space-y-4 mb-6">
-          <div className="flex items-center gap-2">
+        <h2 className="text-2xl font-semibold mb-4">Branch Overview</h2>
+        {/* Branch Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-md">
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">Total Branches</h3>
+            <p className="text-4xl font-bold text-blue-600">{totalBranches}</p>
+          </div>
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-md">
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">Recently Added</h3>
+            {recentBranch ? (
+              <p className="text-lg font-bold text-green-600">{recentBranch.name}</p>
+            ) : (
+              <p className="text-sm text-gray-500">No recent branches added</p>
+            )}
+          </div>
+        </div>
+
+        <h2 className="text-2xl font-semibold mb-4">Branches</h2>
+        {/* Branch Form */}
+        <div className="mb-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = e.target.elements.name.value;
+              handleBranchSubmit(name);
+            }}
+          >
             <input
               type="text"
-              value={branchName}
-              onChange={(e) => setBranchName(e.target.value)}
-              placeholder="Branch Name"
-              required
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
+              name="name"
+              placeholder="Enter Branch Name"
+              className="border border-gray-300 p-2 rounded-md"
+              defaultValue={editBranchId ? branches.find((b) => b.id === editBranchId)?.name : ""}
             />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-2"
-            >
-              <FontAwesomeIcon icon={faPlus} />
-              {editingBranch ? 'Update Branch' : 'Add Branch'}
+            <button type="submit" className="ml-2 bg-blue-500 text-white p-2 rounded-md">
+              {editBranchId ? "Update Branch" : "Create Branch"}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
 
-        <ul className="space-y-4">
+        {/* Branches List */}
+        <div className="space-y-6">
           {branches.map((branch) => (
-            <li key={branch.id} className="bg-gray-50 p-4 rounded-md shadow-md border border-gray-200">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-lg font-semibold text-indigo-800">{branch.name}</span>
-                <div className="flex space-x-2">
-                  <button onClick={() => handleEditBranch(branch)}
-                    className="px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-1">
-                    <FontAwesomeIcon icon={faEdit} />
-                    Edit
+            <div key={branch.id} className="bg-gray-100 p-4 rounded-md shadow-md">
+              <div className="flex justify-between items-center">
+                <span className="text-xl">{branch.name}</span>
+                <div className="space-x-2">
+                  <button
+                    onClick={() => handleEditBranch(branch)}
+                    className="bg-yellow-500 text-white p-2 rounded-md"
+                  >
+                    <EditIcon className="inline-block mr-2" /> Edit
                   </button>
-                  <button onClick={() => handleDeleteBranch(branch.id)}
-                    className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-300 shadow-lg flex items-center gap-1">
-                    <FontAwesomeIcon icon={faTrash} />
-                    Delete
+                  <button
+                    onClick={() => handleDeleteBranch(branch.id)}
+                    className="bg-red-500 text-white p-2 rounded-md"
+                  >
+                    <TrashIcon className="inline-block mr-2" /> Delete
                   </button>
-                  <button onClick={() => handleViewDepartments(branch.id)}
-                    className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition duration-300 shadow-lg flex items-center gap-1">
-                    <FontAwesomeIcon icon={faEye} />
-                    View Departments
+                  <button
+                    onClick={() => navigate(`/departments/${branch.id}`)}
+                    className="bg-green-500 text-white p-2 rounded-md"
+                  >
+                    <EyeIcon className="inline-block mr-2" /> View Departments
                   </button>
                 </div>
               </div>
 
-              <div>
-                <h4 className="font-semibold mb-2">Admins for {branch.name}</h4>
-                <form onSubmit={(e) => handleAddAdmin(e, branch.id)} className="flex space-x-2 mb-4">
+              <h4 className="font-semibold mt-4">Admins for {branch.name}</h4>
+              {/* Admin Form */}
+              <div className="mb-4">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const adminName = e.target.elements.adminName.value;
+                    const adminPassword = e.target.elements.adminPassword.value;
+                    handleAdminSubmit(branch.id, adminName, adminPassword);
+                  }}
+                >
                   <input
                     type="text"
-                    value={adminData[branch.id]?.adminName || ''}
-                    onChange={(e) => handleAdminInputChange(branch.id, 'adminName', e.target.value)}
-                    placeholder="Admin Name"
-                    required
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
+                    name="adminName"
+                    placeholder="Admin Username"
+                    className="border border-gray-300 p-2 rounded-md"
+                    defaultValue={editingAdmin?.username || ""}
                   />
                   <input
                     type="password"
-                    value={adminData[branch.id]?.adminPassword || ''}
-                    onChange={(e) => handleAdminInputChange(branch.id, 'adminPassword', e.target.value)}
+                    name="adminPassword"
                     placeholder="Admin Password"
-                    required
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
+                    className="border border-gray-300 p-2 rounded-md ml-2"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-2"
+                    className="ml-2 bg-blue-500 text-white p-2 rounded-md"
                   >
-                    <FontAwesomeIcon icon={editingAdmin ? faEdit : faPlus} />
-                    {editingAdmin ? 'Update Admin' : 'Add Admin'}
+                    {editingAdmin ? "Update Admin" : "Add Admin"}
                   </button>
                 </form>
-
-                <ul>
-                  {(branchAdmins[branch.id] || []).map((admin) => (
-                    <li key={admin.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-md mb-2">
-                      <span>{admin.username}</span>
-                      <div className="flex space-x-2">
-                        <button onClick={() => handleEditAdmin(branch.id, admin)}
-                          className="px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-1">
-                          <FontAwesomeIcon icon={faEdit} />
-                          Edit
-                        </button>
-                        <button onClick={() => handleDeleteAdmin(branch.id, admin.id)}
-                          className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-300 shadow-lg flex items-center gap-1">
-                          <FontAwesomeIcon icon={faTrash} />
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
               </div>
-            </li>
+
+              {/* Admin List */}
+              <div className="space-y-2">
+                {(branchAdmins[branch.id] || []).map((admin) => (
+                  <div
+                    key={admin.id}
+                    className="flex justify-between items-center bg-gray-200 p-2 rounded-md"
+                  >
+                    <span>{admin.username}</span>
+                    <div className="space-x-2">
+                      <button
+                        onClick={() => handleEditAdmin(branch.id, admin)}
+                        className="bg-yellow-500 text-white p-2 rounded-md"
+                      >
+                        <EditIcon className="inline-block mr-2" /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAdmin(branch.id, admin.id)}
+                        className="bg-red-500 text-white p-2 rounded-md"
+                      >
+                        <TrashIcon className="inline-block mr-2" /> Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </div>
   );

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const navigate = useNavigate();
+  const [role, setRole] = useState('');
+  const [accessId, setAccessId] = useState('');
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -17,26 +17,26 @@ const Login = () => {
       });
 
       const { role, access_id } = response.data;
+      setRole(role);
+      setAccessId(access_id);
 
-      // Navigate based on role
-      switch (role) {
-        case 'admin':
-          navigate('/admin');
-          break;
-        case 'orgadmin':
-          navigate(`/branches/${access_id}`);
-          break;
-        case 'branchadmin':
-          navigate(`/departments/${access_id}`);
-          break;
-        case 'dprtadmin':
-          navigate(`/members/${access_id}`);
-          break;
-        case 'member':
-          navigate(`/member/${access_id}`);
-          break;
-        default:
-          setError('Unknown role');
+      // Store user data in localStorage
+      localStorage.setItem('userRole', role);
+      localStorage.setItem('accessId', access_id);
+
+      // Redirect based on role
+      if (role === 'admin') {
+        window.location.href = '/admin';
+      } else if (role === 'orgadmin') {
+        window.location.href = `/branches/${access_id}`;
+      } else if (role === 'branchadmin') {
+        window.location.href = `/departments/${access_id}`;
+      } else if (role === 'dprtadmin') {
+        window.location.href = `/members/${access_id}`;
+      } else if (role === 'member') {
+        window.location.href = `/member/${access_id}`;
+      } else {
+        setError('Unknown role');
       }
     } catch (err) {
       setError('Invalid username or password');
@@ -50,24 +50,30 @@ const Login = () => {
         {error && <p className="text-red-500 text-center mb-4">{error}</p>}
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">Username</label>
+            <label htmlFor="username" className="block text-gray-700 font-semibold mb-2">Username</label>
             <input
+              id="username" 
+              name="username"  
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="Enter your username"
               required
+              autoComplete="username" 
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-200"
             />
           </div>
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">Password</label>
+            <label htmlFor="password" className="block text-gray-700 font-semibold mb-2">Password</label>
             <input
+              id="password" 
+              name="password" 
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password"
               required
+              autoComplete="current-password"  
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 transition duration-200"
             />
           </div>
@@ -78,9 +84,6 @@ const Login = () => {
             Login
           </button>
         </form>
-        {/* <div className="mt-6 text-center text-gray-600">
-          <p>New User? <a href="/register" className="text-indigo-500 hover:text-indigo-600 font-medium">Register</a></p>
-        </div> */}
       </div>
     </div>
   );

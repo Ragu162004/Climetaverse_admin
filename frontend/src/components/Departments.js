@@ -1,83 +1,89 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { useParams, useNavigate } from 'react-router-dom';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faEdit, faTrash, faPlus, faEye } from '@fortawesome/free-solid-svg-icons';
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+import { useParams, useNavigate } from "react-router-dom";
+import { EditIcon, TrashIcon, EyeIcon } from "lucide-react";
 
 const Departments = () => {
   const { branchId } = useParams();
-  const [branchName, setBranchName] = useState('');
   const [departments, setDepartments] = useState([]);
-  const [departmentName, setDepartmentName] = useState('');
-  const [editingDepartment, setEditingDepartment] = useState(null);
+  const [totalDepartments, setTotalDepartments] = useState(0);
+  const [recentDepartment, setRecentDepartment] = useState(null);
+  const [editDepartmentId, setEditDepartmentId] = useState(null);
   const [departmentAdmins, setDepartmentAdmins] = useState({});
-  const [adminData, setAdminData] = useState({});
   const [editingAdmin, setEditingAdmin] = useState(null);
   const navigate = useNavigate();
 
   const fetchDepartments = async () => {
-    const response = await axios.get(`http://localhost:5000/branches/${branchId}/departments`);
-    setDepartments(response.data);
-    await fetchAllAdmins(response.data);
-    const branchResponse = await axios.get(`http://localhost:5000/branches/${branchId}`);
-    setBranchName(branchResponse.data.name);
+    const response = await axios.get(
+      `http://localhost:5000/branches/${branchId}/departments`
+    );
+    const data = response.data;
+
+    // Update state with department stats
+    setDepartments(data);
+    setTotalDepartments(data.length);
+    setRecentDepartment(data.length > 0 ? data[data.length - 1] : null);
+
+    return data;
   };
 
   const fetchAdmins = async (departmentId) => {
-    const response = await axios.get(`http://localhost:5000/departments/${departmentId}/admins`);
+    const response = await axios.get(
+      `http://localhost:5000/departments/${departmentId}/members`
+    );
     return response.data;
   };
 
   const fetchAllAdmins = async (departments) => {
     const allAdmins = {};
     await Promise.all(
-      departments.map(async (dept) => {
-        const admins = await fetchAdmins(dept.id);
-        allAdmins[dept.id] = admins;
+      departments.map(async (department) => {
+        const admins = await fetchAdmins(department.id);
+        allAdmins[department.id] = admins;
       })
     );
     setDepartmentAdmins(allAdmins);
   };
 
   useEffect(() => {
-    fetchDepartments();
+    const loadDepartmentsAndAdmins = async () => {
+      const departmentData = await fetchDepartments();
+      await fetchAllAdmins(departmentData);
+    };
+    loadDepartmentsAndAdmins();
   }, [branchId]);
 
-  const handleAddDepartment = async (e) => {
-    e.preventDefault();
-    if (editingDepartment) {
-      await axios.put(`http://localhost:5000/departments/${editingDepartment.id}`, { name: departmentName });
-      setEditingDepartment(null);
+  const handleDepartmentSubmit = async (name) => {
+    if (editDepartmentId) {
+      await axios.put(
+        `http://localhost:5000/departments/${editDepartmentId}`,
+        { name }
+      );
     } else {
-      await axios.post(`http://localhost:5000/branches/${branchId}/departments`, { name: departmentName });
+      await axios.post(
+        `http://localhost:5000/branches/${branchId}/departments`,
+        { name }
+      );
     }
-    setDepartmentName('');
-    fetchDepartments();
+    setEditDepartmentId(null);
+    fetchDepartments(); // Update departments and stats
   };
 
   const handleEditDepartment = (department) => {
-    setDepartmentName(department.name);
-    setEditingDepartment(department);
+    setEditDepartmentId(department.id);
   };
 
   const handleDeleteDepartment = async (id) => {
     await axios.delete(`http://localhost:5000/departments/${id}`);
-    fetchDepartments();
+    fetchDepartments(); // Update departments and stats
   };
 
-  const handleViewMembers = (departmentId) => {
-    navigate(`/members/${departmentId}`);
-  };
-
-  const handleAddAdmin = async (e, departmentId) => {
-    e.preventDefault();
-    const { adminName, adminPassword } = adminData[departmentId] || {};
-
+  const handleAdminSubmit = async (departmentId, adminName, adminPassword) => {
     if (editingAdmin) {
       await axios.put(`http://localhost:5000/users/${editingAdmin.id}`, {
         username: adminName,
         password: adminPassword,
-        role: 'dprtadmin',
+        role: "dprtadmin",
         access_id: departmentId,
       });
       setEditingAdmin(null);
@@ -85,23 +91,14 @@ const Departments = () => {
       await axios.post(`http://localhost:5000/users`, {
         username: adminName,
         password: adminPassword,
-        role: 'dprtadmin',
+        role: "dprtadmin",
         access_id: departmentId,
       });
     }
-
-    setAdminData((prev) => ({
-      ...prev,
-      [departmentId]: { adminName: '', adminPassword: '' },
-    }));
     fetchAllAdmins(departments);
   };
 
   const handleEditAdmin = (departmentId, admin) => {
-    setAdminData((prev) => ({
-      ...prev,
-      [departmentId]: { adminName: admin.username, adminPassword: '' },
-    }));
     setEditingAdmin(admin);
   };
 
@@ -110,132 +107,145 @@ const Departments = () => {
     fetchAllAdmins(departments);
   };
 
-  const handleAdminInputChange = (departmentId, field, value) => {
-    setAdminData((prev) => ({
-      ...prev,
-      [departmentId]: {
-        ...prev[departmentId],
-        [field]: value,
-      },
-    }));
-  };
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="w-full max-w-4xl bg-white p-8 rounded-lg shadow-lg">
-        <h2 className="text-2xl font-semibold text-center text-gray-800 mb-6">
-          Departments for {branchName}
-        </h2>
-  
-        <form onSubmit={handleAddDepartment} className="space-y-4 mb-6">
-          <div className="flex items-center gap-2">
+    <div className="container mx-auto py-10">
+      <div className="bg-white p-6 rounded-md shadow-lg">
+        <h2 className="text-2xl font-semibold mb-4">Department Overview</h2>
+        {/* Department Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-md">
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">Total Departments</h3>
+            <p className="text-4xl font-bold text-blue-600">{totalDepartments}</p>
+          </div>
+          <div className="p-6 bg-white border border-gray-200 rounded-lg shadow-md">
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">Recently Added</h3>
+            {recentDepartment ? (
+              <p className="text-lg font-bold text-green-600">{recentDepartment.name}</p>
+            ) : (
+              <p className="text-sm text-gray-500">No recent departments added</p>
+            )}
+          </div>
+        </div>
+
+        <h2 className="text-2xl font-semibold mb-4">Departments</h2>
+        {/* Department Form */}
+        <div className="mb-6">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const name = e.target.elements.name.value;
+              handleDepartmentSubmit(name);
+            }}
+          >
             <input
               type="text"
-              value={departmentName}
-              onChange={(e) => setDepartmentName(e.target.value)}
-              placeholder="Department Name"
-              required
-              className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
+              name="name"
+              placeholder="Enter Department Name"
+              className="border border-gray-300 p-2 rounded-md"
+              defaultValue={
+                editDepartmentId
+                  ? departments.find((d) => d.id === editDepartmentId)?.name
+                  : ""
+              }
             />
-            <button
-              type="submit"
-              className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-2"
-            >
-              <FontAwesomeIcon icon={editingDepartment ? faEdit : faPlus} />
-              {editingDepartment ? 'Update Department' : 'Add Department'}
+            <button type="submit" className="ml-2 bg-blue-500 text-white p-2 rounded-md">
+              {editDepartmentId ? "Update Department" : "Create Department"}
             </button>
-          </div>
-        </form>
-  
-        <ul className="space-y-4">
-          {departments.map((dept) => (
-            <li key={dept.id} className="bg-gray-50 p-4 rounded-md shadow-md border border-gray-200">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-lg font-semibold text-indigo-800">{dept.name}</span>
-                <div className="flex space-x-2">
+          </form>
+        </div>
+
+        {/* Departments List */}
+        <div className="space-y-6">
+          {departments.map((department) => (
+            <div key={department.id} className="bg-gray-100 p-4 rounded-md shadow-md">
+              <div className="flex justify-between items-center">
+                <span className="text-xl">{department.name}</span>
+                <div className="space-x-2">
                   <button
-                    onClick={() => handleEditDepartment(dept)}
-                    className="px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-1"
+                    onClick={() => handleEditDepartment(department)}
+                    className="bg-yellow-500 text-white p-2 rounded-md"
                   >
-                    <FontAwesomeIcon icon={faEdit} />
-                    Edit
+                    <EditIcon className="inline-block mr-2" /> Edit
                   </button>
                   <button
-                    onClick={() => handleDeleteDepartment(dept.id)}
-                    className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-300 shadow-lg flex items-center gap-1"
+                    onClick={() => handleDeleteDepartment(department.id)}
+                    className="bg-red-500 text-white p-2 rounded-md"
                   >
-                    <FontAwesomeIcon icon={faTrash} />
-                    Delete
+                    <TrashIcon className="inline-block mr-2" /> Delete
                   </button>
                   <button
-                    onClick={() => handleViewMembers(dept.id)}
-                    className="px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition duration-300 shadow-lg flex items-center gap-1"
+                    onClick={() => navigate(`/members/${department.id}`)}
+                    className="bg-green-500 text-white p-2 rounded-md"
                   >
-                    <FontAwesomeIcon icon={faEye} />
-                    View Members
+                    <EyeIcon className="inline-block mr-2" /> View Members
                   </button>
                 </div>
               </div>
-  
-              <div>
-                <h4 className="font-semibold mb-2">Admins for {dept.name}</h4>
-                <form onSubmit={(e) => handleAddAdmin(e, dept.id)} className="flex space-x-2 mb-4">
+
+              <h4 className="font-semibold mt-4">Admins for {department.name}</h4>
+              {/* Admin Form */}
+              <div className="mb-4">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const adminName = e.target.elements.adminName.value;
+                    const adminPassword = e.target.elements.adminPassword.value;
+                    handleAdminSubmit(department.id, adminName, adminPassword);
+                  }}
+                >
                   <input
                     type="text"
-                    value={adminData[dept.id]?.adminName || ''}
-                    onChange={(e) => handleAdminInputChange(dept.id, 'adminName', e.target.value)}
-                    placeholder="Admin Name"
-                    required
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
+                    name="adminName"
+                    placeholder="Admin Username"
+                    className="border border-gray-300 p-2 rounded-md"
+                    defaultValue={editingAdmin?.username || ""}
                   />
                   <input
                     type="password"
-                    value={adminData[dept.id]?.adminPassword || ''}
-                    onChange={(e) => handleAdminInputChange(dept.id, 'adminPassword', e.target.value)}
+                    name="adminPassword"
                     placeholder="Admin Password"
-                    required
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:border-indigo-500"
+                    className="border border-gray-300 p-2 rounded-md ml-2"
                   />
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-2"
+                    className="ml-2 bg-blue-500 text-white p-2 rounded-md"
                   >
-                    <FontAwesomeIcon icon={editingAdmin ? faEdit : faPlus} />
-                    {editingAdmin ? 'Update Admin' : 'Add Admin'}
+                    {editingAdmin ? "Update Admin" : "Add Admin"}
                   </button>
                 </form>
-  
-                <ul>
-                  {(departmentAdmins[dept.id] || []).map((admin) => (
-                    <li key={admin.id} className="flex justify-between items-center bg-gray-100 p-2 rounded-md mb-2">
-                      <span>{admin.username}</span>
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => handleEditAdmin(dept.id, admin)}
-                          className="px-3 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition duration-300 shadow-lg flex items-center gap-1"
-                        >
-                          <FontAwesomeIcon icon={faEdit} />
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteAdmin(dept.id, admin.id)}
-                          className="px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-300 shadow-lg flex items-center gap-1"
-                        >
-                          <FontAwesomeIcon icon={faTrash} />
-                          Delete
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
               </div>
-            </li>
+
+              {/* Admin List */}
+              <div className="space-y-2">
+                {(departmentAdmins[department.id] || []).map((admin) => (
+                  <div
+                    key={admin.id}
+                    className="flex justify-between items-center bg-gray-200 p-2 rounded-md"
+                  >
+                    <span>{admin.username}</span>
+                    <div className="space-x-2">
+                      <button
+                        onClick={() => handleEditAdmin(department.id, admin)}
+                        className="bg-yellow-500 text-white p-2 rounded-md"
+                      >
+                        <EditIcon className="inline-block mr-2" /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteAdmin(department.id, admin.id)}
+                        className="bg-red-500 text-white p-2 rounded-md"
+                      >
+                        <TrashIcon className="inline-block mr-2" /> Delete
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
     </div>
   );
-  
 };
 
 export default Departments;
