@@ -4,17 +4,17 @@ from mysql.connector import Error
 from werkzeug.security import check_password_hash
 from werkzeug.security import generate_password_hash
 from flask_cors import CORS
-import uuid  # Add this import to generate UUIDs
+import uuid 
 
-app = Flask(__name__)
-CORS(app)  
+app = Flask(__name__) 
+CORS(app) 
 
 def create_connection():
-    return mysql.connector.connect(
-        host='localhost',
-        user='root',
+    return mysql.connector.connect( 
+        host='localhost',   
+        user='root', 
         password='ragu 16-10-2004',
-        database='admin_db'
+        database='admin_db' 
     )
 
 @app.route('/register', methods=['POST'])
